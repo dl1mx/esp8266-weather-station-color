@@ -28,8 +28,6 @@ See more at https://blog.squix.org
 #include <SPI.h>
 #include <ESP8266WiFi.h>
 
-#include <XPT2046_Touchscreen.h>
-#include "TouchControllerWS.h"
 #include "SunMoonCalc.h"
 
 
@@ -84,13 +82,6 @@ ILI9341_SPI tft = ILI9341_SPI(TFT_CS, TFT_DC);
 MiniGrafx gfx = MiniGrafx(&tft, BITS_PER_PIXEL, palette);
 Carousel carousel(&gfx, 0, 0, 240, 100);
 
-
-XPT2046_Touchscreen ts(TOUCH_CS, TOUCH_IRQ);
-TouchControllerWS touchController(&ts);
-
-void calibrationCallback(int16_t x, int16_t y);
-CalibrationCallback calibration = &calibrationCallback;
-  
 
 OpenWeatherMapCurrentData currentWeather;
 OpenWeatherMapForecastData forecasts[MAX_FORECASTS];
@@ -169,9 +160,6 @@ void setup() {
 
   connectWifi();
 
-  Serial.println("Initializing touch screen...");
-  ts.begin();
-  
   Serial.println("Mounting file system...");
   bool isFSMounted = SPIFFS.begin();
   if (!isFSMounted) {
@@ -180,22 +168,6 @@ void setup() {
     SPIFFS.format();
   }
   drawProgress(100,"Formatting done");
-  boolean isCalibrationAvailable = touchController.loadCalibration();
-  if (!isCalibrationAvailable) {
-    Serial.println("Calibration not available");
-    touchController.startCalibration(&calibration);
-    while (!touchController.isCalibrationFinished()) {
-      gfx.fillBuffer(0);
-      gfx.setColor(MINI_YELLOW);
-      gfx.setTextAlignment(TEXT_ALIGN_CENTER);
-      gfx.drawString(120, 160, "Please calibrate\ntouch screen by\ntouch point");
-      touchController.continueCalibration();
-      gfx.commit();
-      yield();
-    }
-    touchController.saveCalibration();
-  }
-
 
   carousel.setFrames(frames, frameCount);
   carousel.disableAllIndicators();
@@ -208,21 +180,9 @@ void setup() {
 
 long lastDrew = 0;
 bool btnClick;
-uint8_t MAX_TOUCHPOINTS = 10;
-TS_Point points[10];
 uint8_t currentTouchPoint = 0;
 void loop() {
   gfx.fillBuffer(MINI_BLACK);
-  if (touchController.isTouched(0)) {
-    TS_Point p = touchController.getPoint();
-
-    if (p.y < 80) {
-      IS_STYLE_12HR = !IS_STYLE_12HR;
-    } else {
-      screen = (screen + 1) % screenCount;
-    }
-  }
-
   
   if (screen == 0) {
     drawTime();
@@ -626,11 +586,6 @@ void drawAbout() {
   gfx.drawString(15, 250, "Last Reset: ");
   gfx.setColor(MINI_WHITE);
   gfx.drawStringMaxWidth(15, 265, 240 - 2 * 15, ESP.getResetInfo());
-}
-
-void calibrationCallback(int16_t x, int16_t y) {
-  gfx.setColor(1);
-  gfx.fillCircle(x, y, 10);
 }
 
 String getTime(time_t *timestamp) {
